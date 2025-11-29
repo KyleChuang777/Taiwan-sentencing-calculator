@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台灣量刑區間計算器 (專業版)</title>
+    <title>台灣量刑區間計算器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Noto Serif TC 增加正式感 -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -103,17 +103,22 @@
             </h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 法定本刑下限 (Statutory Minimum) - 已加入月輸入 -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">法定刑下限 (年)</label>
-                    <div class="flex items-center space-x-4">
-                        <input type="number" id="minYears" value="0" min="0" class="w-24 p-2 border border-gray-300 rounded focus:ring-gray-500 focus:border-gray-500 text-base">
-                        <label class="flex items-center text-base text-gray-600">
+                    <label class="block text-sm font-medium text-gray-600 mb-1">法定刑下限 (年/月)</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="number" id="minYears" value="0" min="0" class="w-16 p-2 border border-gray-300 rounded focus:ring-gray-500 focus:border-gray-500 text-base">
+                        <span class="text-base">年</span>
+                        <input type="number" id="minMonths" value="0" min="0" class="w-16 p-2 border border-gray-300 rounded focus:ring-gray-500 focus:border-gray-500 text-base">
+                        <span class="text-base">月</span>
+                        <label class="flex items-center text-base text-gray-600 ml-4">
                             <input type="checkbox" id="minLife" class="form-checkbox h-5 w-5 text-gray-600 rounded focus:ring-gray-500">
                             <span class="ml-2">無期徒刑</span>
                         </label>
                     </div>
                 </div>
 
+                <!-- 法定本刑上限 (Statutory Maximum) -->
                 <div>
                     <label class="block text-sm font-medium text-gray-600 mb-1">法定刑上限 (年)</label>
                     <div class="flex items-center space-x-4">
@@ -242,16 +247,22 @@
                 const cleanYearDays = approximateYears * ONE_YEAR_DAYS;
                 const difference = cleanYearDays - remainingDays;
 
+                // 處理 N年 - M月 的精確減輕顯示 (餘數歸零)
                 if (difference > 0 && difference % ONE_MONTH_DAYS === 0) {
                     const monthsReduced = difference / ONE_MONTH_DAYS;
                     if (monthsReduced >= 1 && monthsReduced <= 12) {
                         return { years: approximateYears - 1, months: 12 - monthsReduced, days: 0 }; 
                     }
                 }
+                
                 const years = Math.floor(remainingDays / ONE_YEAR_DAYS);
                 remainingDays = remainingDays % ONE_YEAR_DAYS;
+                
                 const months = Math.floor(remainingDays / ONE_MONTH_DAYS);
-                const days = remainingDays % ONE_MONTH_DAYS; 
+                
+                // *** 修正點：如果總刑期超過一個月，則為了顯示整潔，忽略不足一個月的剩餘天數 (日) ***
+                const days = (years > 0 || months > 0) ? 0 : remainingDays % ONE_MONTH_DAYS; 
+                
                 return { years, months, days };
             },
             formatDays(days) {
@@ -287,12 +298,27 @@
                 // 讀取輸入
                 const minYearsInput = parseInt(document.getElementById('minYears').value) || 0;
                 const maxYearsInput = parseInt(document.getElementById('maxYears').value) || 0;
+                const minMonthsInput = parseInt(document.getElementById('minMonths').value) || 0;
+                
                 const minLife = document.getElementById('minLife').checked;
                 const maxLife = document.getElementById('maxLife').checked;
                 const maxDeath = document.getElementById('maxDeath').checked;
 
-                let minDays = minLife ? LIFE_IMPRISONMENT : TimeConverter.toDays(minYearsInput, 0);
-                let maxDays = maxDeath ? DEATH_PENALTY : (maxLife ? LIFE_IMPRISONMENT : TimeConverter.toDays(maxYearsInput, 0));
+                let minDays, maxDays;
+                
+                // 初始法定刑設定
+                if (minLife) {
+                    minDays = LIFE_IMPRISONMENT; // 無期徒刑
+                } else {
+                    // 規則：若年/月輸入皆為 0，最低為 2 個月 (60 days)
+                    if (minYearsInput === 0 && minMonthsInput === 0 && !minLife) {
+                        minDays = ONE_MONTH_DAYS * 2;
+                    } else {
+                        minDays = TimeConverter.toDays(minYearsInput, minMonthsInput);
+                    }
+                }
+                
+                maxDays = maxDeath ? DEATH_PENALTY : (maxLife ? LIFE_IMPRISONMENT : TimeConverter.toDays(maxYearsInput, 0));
                 
                 if (minDays !== LIFE_IMPRISONMENT && maxDays !== DEATH_PENALTY && maxDays !== LIFE_IMPRISONMENT && minDays >= maxDays) {
                     throw new Error('有期徒刑下限不能大於或等於上限');
@@ -322,49 +348,42 @@
 
                 // 處理「減輕或免除其刑」 (三分之一減輕)
                 for (let i = 0; i < exemptMitigationCount; i++) {
-                    // *** 修正點：死刑減輕為無期徒刑，並跳過該次迴圈的其餘減輕邏輯 ***
+                    // 死刑減輕為無期徒刑，並跳過該次迴圈的其餘減輕邏輯
                     if (maxDays === DEATH_PENALTY) {
                         maxDays = LIFE_IMPRISONMENT;
-                        currentMaxDeath = false;
-                        currentMaxLife = true;
-                        continue; // 修正：跳過本輪，避免連鎖減輕
+                        continue; 
                     } 
                     
                     if (maxDays !== DEATH_PENALTY && maxDays !== LIFE_IMPRISONMENT) {
                         maxDays = Math.max(0, maxDays - ONE_MONTH_DAYS);
                     } else if (maxDays === LIFE_IMPRISONMENT) {
                         maxDays = TimeConverter.toDays(20, 0);
-                        currentMaxLife = false; currentMaxDeath = false;
                     }
                     if (minDays !== LIFE_IMPRISONMENT) minDays = Math.floor(minDays / 3);
-                    else { minDays = FIFTEEN_YEARS_DAYS; currentMinLife = false; }
+                    else { minDays = FIFTEEN_YEARS_DAYS; }
                 }
 
                 // 處理「一般減輕因子」 (二分之一減輕)
                 for (let i = 0; i < generalMitigationCount; i++) {
-                    // *** 修正點：死刑減輕為無期徒刑，並跳過該次迴圈的其餘減輕邏輯 ***
+                    // 死刑減輕為無期徒刑，並跳過該次迴圈的其餘減輕邏輯
                     if (maxDays === DEATH_PENALTY) {
                         maxDays = LIFE_IMPRISONMENT;
-                        currentMaxDeath = false;
-                        currentMaxLife = true;
-                        continue; // 修正：跳過本輪，避免連鎖減輕
+                        continue; 
                     } 
                     
                     if (maxDays !== DEATH_PENALTY && maxDays !== LIFE_IMPRISONMENT) {
                         maxDays = Math.max(0, maxDays - ONE_MONTH_DAYS);
                     } else if (maxDays === LIFE_IMPRISONMENT) {
                         maxDays = TimeConverter.toDays(20, 0);
-                        currentMaxLife = false; currentMaxDeath = false;
                     }
                     if (minDays !== LIFE_IMPRISONMENT) minDays = Math.floor(minDays / 2);
-                    else { minDays = FIFTEEN_YEARS_DAYS; currentMinLife = false; }
+                    else { minDays = FIFTEEN_YEARS_DAYS; }
                 }
 
                 if (apply59 && minDaysBeforeMitigation !== LIFE_IMPRISONMENT) {
                     const specialMaxDays = Math.max(0, minDaysBeforeMitigation - ONE_MONTH_DAYS);
                     if (maxDays === DEATH_PENALTY || maxDays === LIFE_IMPRISONMENT || specialMaxDays < maxDays) {
                         maxDays = specialMaxDays;
-                        currentMaxLife = false; currentMaxDeath = false;
                     }
                 }
                 
@@ -383,8 +402,8 @@
                 calculatedRange = { 
                     min: minDays, 
                     max: maxDays, 
-                    isLife: currentMaxLife || currentMinLife || maxDays === LIFE_IMPRISONMENT, 
-                    isDeath: currentMaxDeath || maxDays === DEATH_PENALTY
+                    isLife: maxDays === LIFE_IMPRISONMENT, 
+                    isDeath: maxDays === DEATH_PENALTY
                 };
 
                 document.getElementById('divideZonesBtn').disabled = false;
@@ -470,7 +489,6 @@
                     }
                     
                     // 重組 (確保順序是 極輕度 -> 中度 -> 重度 -> 極重度)
-                    // zones 陣列現在是 [Death, Life] + [Light, Mid, Heavy], 需要重新排序
                     const deathZone = zones.shift();
                     const lifeZone = zones.shift();
                     zones = [...fixedZones, lifeZone, deathZone];
@@ -545,18 +563,15 @@
             `;
 
             // 列表生成 (嚴格遵守 重 -> 輕)
-            // zones 陣列是 [極輕度 -> 極重度]，所以必須 reverse
             zones.slice().reverse().forEach(zone => {
                 let displayStr = '';
                 
                 if (zone.min === DEATH_PENALTY) {
                     displayStr = "死刑";
                 } else if (zone.max === LIFE_IMPRISONMENT) {
-                    // 無期徒刑作為上限或單獨區間
                     if (zone.min === LIFE_IMPRISONMENT) {
                          displayStr = "無期徒刑";
                     } else {
-                        // 這是指有期徒刑的最高段，銜接無期徒刑 (e.g., 12年 ~ 無期徒刑)
                         const minStr = TimeConverter.formatDays(zone.min);
                         displayStr = `${minStr} ~ 無期徒刑`;
                     }
