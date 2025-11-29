@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台灣量刑區間計算器</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 PptxGenJS 用於產生投影片 -->
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
     <!-- 引入 Noto Serif TC 增加正式感 -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
@@ -12,8 +14,6 @@
         body {
             font-family: 'Inter', system-ui, sans-serif;
             background-color: #f3f4f6;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
         }
 
         /* 投影片容器 - 素雅風格 */
@@ -63,29 +63,6 @@
             background-color: #eff6ff;
             border-radius: 2px;
         }
-
-        /* 列印專用樣式 */
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            #slideContent, #slideContent * {
-                visibility: visible;
-            }
-            #slideContent {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                margin: 0;
-                padding: 2rem;
-                border: none;
-                box-shadow: none;
-            }
-            [contenteditable="true"] {
-                outline: none !important;
-            }
-        }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -103,7 +80,7 @@
             </h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- 法定本刑下限 (Statutory Minimum) - 已加入月輸入 -->
+                <!-- 法定本刑下限 (Statutory Minimum) -->
                 <div>
                     <label class="block text-sm font-medium text-gray-600 mb-1">法定刑下限 (年/月)</label>
                     <div class="flex items-center space-x-2">
@@ -202,16 +179,18 @@
                 <div class="flex gap-2">
                     <p class="text-sm text-gray-500 flex items-center mr-4">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                        點擊文字可直接編輯
+                        點擊文字可直接編輯，下載時會保留您的修改
                     </p>
-                    <button onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 shadow-sm flex items-center transition">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                        列印 / 另存 PDF
+                    
+                    <!-- PPTX 下載按鈕 -->
+                    <button onclick="downloadPptx()" class="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded hover:bg-orange-700 shadow-sm flex items-center transition">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        下載 PPTX (可編輯)
                     </button>
                 </div>
             </div>
 
-            <!-- 真正被列印/下載的區域 -->
+            <!-- 真正被預覽的區域 -->
             <div id="slideContent" class="slide-paper max-w-3xl mx-auto rounded-none md:rounded-lg">
                 <!-- 內容會由 JS 渲染 -->
             </div>
@@ -247,7 +226,6 @@
                 const cleanYearDays = approximateYears * ONE_YEAR_DAYS;
                 const difference = cleanYearDays - remainingDays;
 
-                // 處理 N年 - M月 的精確減輕顯示 (餘數歸零)
                 if (difference > 0 && difference % ONE_MONTH_DAYS === 0) {
                     const monthsReduced = difference / ONE_MONTH_DAYS;
                     if (monthsReduced >= 1 && monthsReduced <= 12) {
@@ -257,10 +235,9 @@
                 
                 const years = Math.floor(remainingDays / ONE_YEAR_DAYS);
                 remainingDays = remainingDays % ONE_YEAR_DAYS;
-                
                 const months = Math.floor(remainingDays / ONE_MONTH_DAYS);
                 
-                // *** 修正點：如果總刑期超過一個月，則為了顯示整潔，忽略不足一個月的剩餘天數 (日) ***
+                // 忽略不足一個月的零頭
                 const days = (years > 0 || months > 0) ? 0 : remainingDays % ONE_MONTH_DAYS; 
                 
                 return { years, months, days };
@@ -295,7 +272,6 @@
                 document.getElementById('minResult').textContent = ''; 
                 document.getElementById('maxResult').textContent = '';
                 
-                // 讀取輸入
                 const minYearsInput = parseInt(document.getElementById('minYears').value) || 0;
                 const maxYearsInput = parseInt(document.getElementById('maxYears').value) || 0;
                 const minMonthsInput = parseInt(document.getElementById('minMonths').value) || 0;
@@ -306,11 +282,9 @@
 
                 let minDays, maxDays;
                 
-                // 初始法定刑設定
                 if (minLife) {
-                    minDays = LIFE_IMPRISONMENT; // 無期徒刑
+                    minDays = LIFE_IMPRISONMENT;
                 } else {
-                    // 規則：若年/月輸入皆為 0，最低為 2 個月 (60 days)
                     if (minYearsInput === 0 && minMonthsInput === 0 && !minLife) {
                         minDays = ONE_MONTH_DAYS * 2;
                     } else {
@@ -342,13 +316,8 @@
                 if (apply59) generalMitigationCount += 1;
                 const minDaysBeforeMitigation = minDays;
 
-                let currentMinLife = minLife;
-                let currentMaxLife = maxLife;
-                let currentMaxDeath = maxDeath;
-
-                // 處理「減輕或免除其刑」 (三分之一減輕)
+                // 處理「減輕或免除其刑」 (1/3)
                 for (let i = 0; i < exemptMitigationCount; i++) {
-                    // 死刑減輕為無期徒刑，並跳過該次迴圈的其餘減輕邏輯
                     if (maxDays === DEATH_PENALTY) {
                         maxDays = LIFE_IMPRISONMENT;
                         continue; 
@@ -363,9 +332,8 @@
                     else { minDays = FIFTEEN_YEARS_DAYS; }
                 }
 
-                // 處理「一般減輕因子」 (二分之一減輕)
+                // 處理「一般減輕因子」 (1/2)
                 for (let i = 0; i < generalMitigationCount; i++) {
-                    // 死刑減輕為無期徒刑，並跳過該次迴圈的其餘減輕邏輯
                     if (maxDays === DEATH_PENALTY) {
                         maxDays = LIFE_IMPRISONMENT;
                         continue; 
@@ -416,7 +384,7 @@
             }
         }
 
-        // --- 區分區間並直接產出投影片 ---
+        // --- 區分區間 ---
         function divideSentencingZones() {
             const min = calculatedRange.min;
             const max = calculatedRange.max;
@@ -437,7 +405,6 @@
             const isDeath = calculatedRange.isDeath;
             const isLife = calculatedRange.isLife;
 
-            // 1. 全有期徒刑狀況
             if (max !== DEATH_PENALTY && max !== LIFE_IMPRISONMENT) {
                 totalFixedTermDays = max - min;
                 const interval = Math.floor(totalFixedTermDays / 5);
@@ -450,23 +417,13 @@
                     currentMin = zoneMax + 1;
                 }
             } 
-            // 2. 含死刑 或 無期徒刑
             else if (isDeath || isLife) {
-                let fixedTermMax;
-                
-                // 邏輯修正：當包含 Life/Death 時，有期徒刑天花板設為 15 年
-                fixedTermMax = TimeConverter.toDays(15, 0);
+                let fixedTermMax = TimeConverter.toDays(15, 0);
 
                 if (isDeath) {
-                    // 死刑 + 無期 + 有期 (5個區間: Death, Life, Fixed*3)
-                    
-                    // 1. 死刑 (極重度)
                     zones.push({ name: '極重度 (死刑)', min: DEATH_PENALTY, max: DEATH_PENALTY, isSpecial: true });
-                    
-                    // 2. 無期徒刑 (重度)
                     zones.push({ name: '重度', min: LIFE_IMPRISONMENT, max: LIFE_IMPRISONMENT, isSpecial: true }); 
                     
-                    // 3. 剩下的區間 (Zone 1, 2, 3) 用來分有期徒刑 (MinDays 到 15年)
                     const effectiveMax = fixedTermMax;
                     totalFixedTermDays = effectiveMax - min;
                     
@@ -476,7 +433,7 @@
                          return;
                     }
 
-                    const interval = Math.floor(totalFixedTermDays / 3); // 剩 3 個區間
+                    const interval = Math.floor(totalFixedTermDays / 3);
                     let currentMin = min;
                     const remainingZoneNames = ['極輕度', '輕度', '中度'];
                     
@@ -487,21 +444,13 @@
                         fixedZones.push({ name: remainingZoneNames[i], min: currentMin, max: zoneMax });
                         currentMin = zoneMax + 1;
                     }
-                    
-                    // 重組 (確保順序是 極輕度 -> 中度 -> 重度 -> 極重度)
                     const deathZone = zones.shift();
                     const lifeZone = zones.shift();
                     zones = [...fixedZones, lifeZone, deathZone];
 
-
                 } else { 
-                    // 只有無期徒刑 (沒有死刑) (5個區間: Life, Fixed*4)
-                    // Rule 7(4): 平均分成5等分, 無期徒刑在 "極重度"
-                    
-                    // 1. 極重度: 無期徒刑
                     zones.push({ name: '極重度', min: LIFE_IMPRISONMENT, max: LIFE_IMPRISONMENT, isSpecial: true });
                     
-                    // 2. 剩下的 4 個區間分有期徒刑
                     const effectiveMax = fixedTermMax;
                     totalFixedTermDays = effectiveMax - min;
                     
@@ -511,7 +460,7 @@
                          return;
                     }
 
-                    const interval = Math.floor(totalFixedTermDays / 4); // 剩 4 個區間
+                    const interval = Math.floor(totalFixedTermDays / 4);
                     let currentMin = min;
                     const remainingZoneNames = ['極輕度', '輕度', '中度', '重度'];
                     
@@ -522,8 +471,6 @@
                         fixedZones.push({ name: remainingZoneNames[i], min: currentMin, max: zoneMax });
                         currentMin = zoneMax + 1;
                     }
-                    
-                    // 重組 (確保順序是 極輕度 -> 重度 -> 極重度(Life))
                     const exHeavyZone = zones.shift();
                     zones = [...fixedZones, exHeavyZone];
                 }
@@ -533,7 +480,7 @@
             generateSlide();
         }
 
-        // --- 產出「素雅大方」投影片 ---
+        // --- 渲染 HTML 預覽 ---
         function generateSlide() {
             const zones = zoneDataStore;
             const slideContentDiv = document.getElementById('slideContent');
@@ -545,6 +492,7 @@
                  rangeText = `量刑範圍：${TimeConverter.formatDays(calculatedRange.min)} ~ ${TimeConverter.formatDays(calculatedRange.max)}`;
             }
 
+            // 素雅配色的指示條 (Tailwind Classes for HTML)
             const colorMap = {
                 '極重度': 'bg-red-800',           
                 '極重度 (死刑)': 'bg-gray-900',  
@@ -554,15 +502,16 @@
                 '極輕度': 'bg-blue-700',          
             };
 
+            // 投影片 Title (id="ppt-title" 用於擷取文字)
             let html = `
                 <div class="text-center mb-10">
-                    <h1 class="text-4xl font-bold text-gray-800 mb-3 slide-title-font" contenteditable="true" spellcheck="false">量刑區間分析</h1>
-                    <p class="text-lg text-gray-500 font-medium tracking-wide" contenteditable="true" spellcheck="false">${rangeText}</p>
+                    <h1 id="ppt-title" class="text-4xl font-bold text-gray-800 mb-3 slide-title-font" contenteditable="true" spellcheck="false">量刑區間分析</h1>
+                    <p id="ppt-subtitle" class="text-lg text-gray-500 font-medium tracking-wide" contenteditable="true" spellcheck="false">${rangeText}</p>
                 </div>
-                <div class="space-y-2 border-t border-b border-gray-100 py-4">
+                <div id="ppt-zones" class="space-y-2 border-t border-b border-gray-100 py-4">
             `;
 
-            // 列表生成 (嚴格遵守 重 -> 輕)
+            // 列表生成 (倒序：極重 -> 極輕)
             zones.slice().reverse().forEach(zone => {
                 let displayStr = '';
                 
@@ -583,11 +532,21 @@
 
                 const indicatorColor = colorMap[zone.name] || 'bg-gray-500';
 
+                // 加入 data-color-hex 供 PPTX 生成使用
+                // 對照 Tailwind 色碼
+                let hexColor = "6B7280"; // Default gray
+                if (zone.name.includes("死刑")) hexColor = "111827";
+                else if (zone.name === "極重度") hexColor = "991B1B";
+                else if (zone.name === "重度") hexColor = "DC2626";
+                else if (zone.name === "中度") hexColor = "CA8A04";
+                else if (zone.name === "輕度") hexColor = "0D9488";
+                else if (zone.name === "極輕度") hexColor = "1D4ED8";
+
                 html += `
-                    <div class="zone-row group">
+                    <div class="zone-row group" data-pptx-color="${hexColor}">
                         <div class="zone-indicator ${indicatorColor} shrink-0"></div>
-                        <div class="w-32 text-xl font-bold text-gray-800 slide-title-font shrink-0" contenteditable="true" spellcheck="false">${zone.name}</div>
-                        <div class="flex-grow text-right text-lg text-gray-600 font-mono tracking-tight" contenteditable="true" spellcheck="false">
+                        <div class="w-32 text-xl font-bold text-gray-800 slide-title-font shrink-0 ppt-zone-name" contenteditable="true" spellcheck="false">${zone.name}</div>
+                        <div class="flex-grow text-right text-lg text-gray-600 font-mono tracking-tight ppt-zone-value" contenteditable="true" spellcheck="false">
                             ${displayStr}
                         </div>
                     </div>
@@ -597,7 +556,7 @@
             html += `
                 </div>
                 <div class="mt-8 flex justify-between items-end">
-                     <p class="text-xs text-gray-400" contenteditable="true" spellcheck="false">註：區間劃分僅供參考，實際量刑視個案而定。</p>
+                     <p id="ppt-note" class="text-xs text-gray-400" contenteditable="true" spellcheck="false">註：區間劃分僅供參考，實際量刑視個案而定。</p>
                      <p class="text-xs text-gray-300 font-serif italic" contenteditable="true">Sentencing Range Analysis</p>
                 </div>
             `;
@@ -608,6 +567,85 @@
             setTimeout(() => {
                 document.getElementById('slidePresentation').scrollIntoView({ behavior: 'smooth' });
             }, 100);
+        }
+
+        // --- 下載 PPTX (讀取網頁上的內容以支援手動修改) ---
+        function downloadPptx() {
+            // 1. 初始化 PptxGenJS
+            let pptx = new PptxGenJS();
+            
+            // 設定標題
+            pptx.title = "量刑區間分析";
+            
+            // 建立投影片
+            let slide = pptx.addSlide();
+            
+            // 2. 抓取 DOM 元素內容 (支援使用者手動修改)
+            const titleText = document.getElementById('ppt-title').innerText;
+            const subtitleText = document.getElementById('ppt-subtitle').innerText;
+            const noteText = document.getElementById('ppt-note').innerText;
+            
+            // 3. 繪製標題
+            slide.addText(titleText, { 
+                x: 0.5, y: 0.5, w: '90%', h: 0.8, 
+                fontSize: 32, bold: true, color: '1F2937', align: 'center', fontFace: 'Arial' 
+            });
+            slide.addText(subtitleText, { 
+                x: 0.5, y: 1.2, w: '90%', h: 0.5, 
+                fontSize: 16, color: '6B7280', align: 'center', fontFace: 'Arial' 
+            });
+
+            // 4. 繪製區間 (Zone Rows)
+            const rows = document.querySelectorAll('.zone-row');
+            let startY = 1.8;
+            const rowHeight = 0.6;
+
+            rows.forEach((row, index) => {
+                const nameText = row.querySelector('.ppt-zone-name').innerText;
+                const valueText = row.querySelector('.ppt-zone-value').innerText;
+                const colorHex = row.getAttribute('data-pptx-color') || '6B7280';
+                
+                let currentY = startY + (index * rowHeight);
+
+                // 色條 (Shape: Rect)
+                slide.addShape(pptx.ShapeType.rect, {
+                    x: 1.0, y: currentY + 0.1, w: 0.1, h: 0.4,
+                    fill: { color: colorHex }, line: { color: colorHex }
+                });
+
+                // 區間名稱
+                slide.addText(nameText, {
+                    x: 1.3, y: currentY, w: 2.0, h: rowHeight,
+                    fontSize: 18, bold: true, color: '1F2937', align: 'left', fontFace: 'Arial'
+                });
+
+                // 區間數值
+                slide.addText(valueText, {
+                    x: 3.5, y: currentY, w: 5.5, h: rowHeight,
+                    fontSize: 16, color: '4B5563', align: 'right', fontFace: 'Arial' // Monospace effect in PPT is hard, sticking to Arial
+                });
+                
+                // 分隔線 (Optional, to mimic HTML border-bottom)
+                if (index < rows.length - 1) {
+                    slide.addShape(pptx.ShapeType.line, {
+                        x: 1.0, y: currentY + rowHeight, w: 8.0, h: 0,
+                        line: { color: 'F3F4F6', width: 1 }
+                    });
+                }
+            });
+
+            // 5. 頁尾註釋
+            slide.addText(noteText, {
+                x: 0.5, y: 5.2, w: 5.0, h: 0.3,
+                fontSize: 10, color: '9CA3AF', align: 'left', fontFace: 'Arial'
+            });
+            slide.addText("Sentencing Range Analysis", {
+                x: 6.0, y: 5.2, w: 3.5, h: 0.3,
+                fontSize: 10, color: 'D1D5DB', align: 'right', italic: true, fontFace: 'Arial'
+            });
+
+            // 6. 匯出檔案
+            pptx.writeFile({ fileName: "Sentencing_Analysis.pptx" });
         }
     </script>
 </body>
