@@ -129,13 +129,15 @@
                     <input type="number" id="generalMitigationCount" value="0" min="0" class="mt-1 w-full p-2 border border-gray-300 rounded text-base">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600">減輕或免除其刑</label>
+                    <!-- 修正點 1：加上「次數」 -->
+                    <label class="block text-sm font-medium text-gray-600">減輕或免除其刑次數</label>
                     <input type="number" id="exemptMitigationCount" value="0" min="0" class="mt-1 w-full p-2 border border-gray-300 rounded text-base">
                 </div>
                 <div class="flex items-end pt-2">
                     <label class="flex items-center text-base font-medium text-gray-700">
                         <input type="checkbox" id="apply59" class="form-checkbox h-5 w-5 text-gray-800 rounded focus:ring-gray-500">
-                        <span class="ml-2">適用刑法第59條</span>
+                        <!-- 修正點 2：加上「另」 -->
+                        <span class="ml-2">另適用刑法第59條</span>
                     </label>
                 </div>
             </div>
@@ -220,12 +222,18 @@
             fromDays(totalDays) {
                 if (totalDays === LIFE_IMPRISONMENT) return { years: LIFE_IMPRISONMENT, months: 0, days: 0 };
                 if (totalDays === DEATH_PENALTY) return { years: DEATH_PENALTY, months: 0, days: 0 };
+                
+                // Art. 59 最低刑期 59 日的特殊顯示處理 (僅用於顯示，不影響計算)
+                if (totalDays === 59) {
+                    return { years: 0, months: 0, days: 59 };
+                }
 
                 let remainingDays = Math.max(0, totalDays);
                 const approximateYears = Math.ceil(remainingDays / ONE_YEAR_DAYS);
                 const cleanYearDays = approximateYears * ONE_YEAR_DAYS;
                 const difference = cleanYearDays - remainingDays;
 
+                // 處理 N年 - M月 的精確減輕顯示 (餘數歸零)
                 if (difference > 0 && difference % ONE_MONTH_DAYS === 0) {
                     const monthsReduced = difference / ONE_MONTH_DAYS;
                     if (monthsReduced >= 1 && monthsReduced <= 12) {
@@ -237,8 +245,9 @@
                 remainingDays = remainingDays % ONE_YEAR_DAYS;
                 const months = Math.floor(remainingDays / ONE_MONTH_DAYS);
                 
-                // 忽略不足一個月的零頭
-                const days = (years > 0 || months > 0) ? 0 : remainingDays % ONE_MONTH_DAYS; 
+                // --- 修正點：精確計算剩餘日數 ---
+                // 由於移除了顯示簡化，不足一個月的日數將被精確計算和顯示。
+                const days = remainingDays - (months * ONE_MONTH_DAYS);
                 
                 return { years, months, days };
             },
@@ -251,6 +260,8 @@
                 let parts = [];
                 if (years > 0) parts.push(`${years}年`);
                 if (months > 0) parts.push(`${months}月`);
+                
+                // 修正點：僅當天數存在且大於零時才顯示
                 if (remainingDays > 0) parts.push(`${remainingDays}日`);
                 if (parts.length === 0) return '免除其刑';
                 return parts.join('');
@@ -285,6 +296,7 @@
                 if (minLife) {
                     minDays = LIFE_IMPRISONMENT;
                 } else {
+                    // 規則：若年/月輸入皆為 0，最低為 2 個月 (60 days)
                     if (minYearsInput === 0 && minMonthsInput === 0 && !minLife) {
                         minDays = ONE_MONTH_DAYS * 2;
                     } else {
@@ -348,18 +360,37 @@
                     else { minDays = FIFTEEN_YEARS_DAYS; }
                 }
 
+                let isSpecialMaxApplied = false;
                 if (apply59 && minDaysBeforeMitigation !== LIFE_IMPRISONMENT) {
                     const specialMaxDays = Math.max(0, minDaysBeforeMitigation - ONE_MONTH_DAYS);
                     if (maxDays === DEATH_PENALTY || maxDays === LIFE_IMPRISONMENT || specialMaxDays < maxDays) {
                         maxDays = specialMaxDays;
+                        isSpecialMaxApplied = true;
                     }
+                }
+                
+                // *** 修正點：Art. 59 上限 59 日鎖定 ***
+                // 只有當 Art. 59 的特殊上限被應用時，且結果低於 59 日 (但非 0) 時，才鎖定上限。
+                if (isSpecialMaxApplied && maxDays > 0 && maxDays < 59 && maxDays !== LIFE_IMPRISONMENT) {
+                    maxDays = 59;
+                    statusMsg.textContent = '警告：適用59條後，上限低於59日，已強制鎖定為59日。';
+                    statusMsg.className = "text-base font-bold text-orange-600 mt-2";
+                    statusMsg.classList.remove('hidden');
+                } else if (isSpecialMaxApplied) {
+                    // 如果適用了特殊上限，但沒有觸發 59日鎖定，則清除其他警告
+                    statusMsg.textContent = '';
+                    statusMsg.className = "hidden";
                 }
                 
                 if (minDays !== LIFE_IMPRISONMENT && maxDays !== DEATH_PENALTY && maxDays !== LIFE_IMPRISONMENT && minDays > maxDays) {
                     maxDays = minDays;
                     statusMsg.textContent = '警告：多次減輕導致上限低於下限，已將上限調整為等於下限。';
                     statusMsg.className = "text-base font-bold text-orange-600 mt-2";
-                } else {
+                    statusMsg.classList.remove('hidden');
+                } 
+                
+                // 確保成功時清除訊息
+                if (!statusMsg.textContent) {
                     statusMsg.textContent = '';
                     statusMsg.className = "hidden";
                 }
@@ -381,6 +412,7 @@
                 console.error(error);
                 statusMsg.textContent = `計算錯誤：${error.message}`;
                 statusMsg.className = "text-base font-bold text-red-700 mt-2";
+                statusMsg.classList.remove('hidden');
             }
         }
 
